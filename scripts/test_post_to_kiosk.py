@@ -126,9 +126,14 @@ class _CapturingHandler(BaseHTTPRequestHandler):
         pass
 
 
-def _start_capturing_server():
+def _start_server(handler_cls=_CapturingHandler):
+    """Start a throwaway loopback server with the given handler; return (server, base_url).
+
+    Resets _CapturingHandler.received so the capturing tests see only their own
+    POST. The non-capturing handlers (500, redirect) ignore it.
+    """
     _CapturingHandler.received = []
-    server = HTTPServer(("127.0.0.1", 0), _CapturingHandler)
+    server = HTTPServer(("127.0.0.1", 0), handler_cls)
     threading.Thread(target=server.serve_forever, daemon=True).start()
     return server, f"http://127.0.0.1:{server.server_address[1]}"
 
@@ -138,7 +143,7 @@ def _start_capturing_server():
 
 def test_file_secrets_stdin_message_posts_correct_payload():
     """Plow transport: file secrets + message on stdin. http:// accepted (LAN)."""
-    server, base = _start_capturing_server()
+    server, base = _start_server()
     try:
         with tempfile.TemporaryDirectory() as d:
             use_file_secrets(Path(d), endpoint=f"{base}/api/message", body_type="alert")
@@ -164,7 +169,7 @@ def test_file_secrets_stdin_message_posts_correct_payload():
 
 def test_env_secrets_message_file_posts_and_consumes_file():
     """Hermes transport: env secrets + MESSAGE_FILE handoff, consumed on success."""
-    server, base = _start_capturing_server()
+    server, base = _start_server()
     try:
         with tempfile.TemporaryDirectory() as d:
             use_env_secrets(Path(d), endpoint=f"{base}/api/message", card="3", body_type="weather")
@@ -187,9 +192,7 @@ def test_env_secrets_message_file_posts_and_consumes_file():
 
 def test_message_file_preserved_on_send_failure():
     """A failed send must leave MESSAGE_FILE intact so a retry can resend."""
-    server = HTTPServer(("127.0.0.1", 0), _Failing500Handler)
-    threading.Thread(target=server.serve_forever, daemon=True).start()
-    base = f"http://127.0.0.1:{server.server_address[1]}"
+    server, base = _start_server(_Failing500Handler)
     try:
         with tempfile.TemporaryDirectory() as d:
             use_env_secrets(Path(d), endpoint=f"{base}/api/message")
@@ -208,7 +211,7 @@ def test_message_file_preserved_on_send_failure():
 def test_optional_title_is_posted_when_set():
     """A producer can set TITLE to control the eyebrow: '' hides it. Absent (None)
     leaves `title` off the body — the default the live-post test covers."""
-    server, base = _start_capturing_server()
+    server, base = _start_server()
     try:
         with tempfile.TemporaryDirectory() as d:
             use_file_secrets(Path(d), endpoint=f"{base}/api/message", body_type="affirmation")
@@ -246,17 +249,28 @@ def test_dry_run_redacts_body_and_token():
 
 
 def test_dry_run_does_not_consume_message_file():
-    """--dry-run is a test — it must not delete the MESSAGE_FILE the real run needs."""
+    """--dry-run on the MESSAGE_FILE transport must (a) not delete the file the
+    real run needs and (b) redact the body text + token in stdout, the same as
+    the stdin transport — a MESSAGE_FILE may hold paraphrased private text."""
+    distinctive = "Stephanie asked about the proposal yesterday"
     with tempfile.TemporaryDirectory() as d:
         use_env_secrets(Path(d), body_type="weather")
         msg = Path(d) / "ld-weather-text"
-        msg.write_text("tile html")
+        msg.write_text(distinctive)
         post_to_kiosk.MESSAGE_FILE = str(msg)
-        code, _ = run("--dry-run")
+        code, out = run("--dry-run")
         still_there = msg.exists()
+        printed = json.loads(out)
     reset_module()
     check("dry-run exit zero", code == 0)
     check("dry-run leaves MESSAGE_FILE intact", still_there)
+    check("authorization is redacted", printed["authorization"] == "Bearer <redacted>")
+    check(
+        "MESSAGE_FILE body text is redacted with length",
+        printed["body"]["text"] == f"<redacted, {len(distinctive)} chars>",
+    )
+    check("MESSAGE_FILE text never appears in dry-run stdout", distinctive not in out)
+    check("env token never appears in dry-run stdout", TOKEN not in out)
 
 
 class _Failing500Handler(BaseHTTPRequestHandler):
@@ -271,9 +285,7 @@ class _Failing500Handler(BaseHTTPRequestHandler):
 
 
 def test_non_200_exits_non_zero():
-    server = HTTPServer(("127.0.0.1", 0), _Failing500Handler)
-    threading.Thread(target=server.serve_forever, daemon=True).start()
-    base = f"http://127.0.0.1:{server.server_address[1]}"
+    server, base = _start_server(_Failing500Handler)
     try:
         with tempfile.TemporaryDirectory() as d:
             use_file_secrets(Path(d), endpoint=f"{base}/api/message")
@@ -357,9 +369,7 @@ def test_redirect_not_followed():
     """A 3xx must not be followed: the no-redirect opener turns it into an
     HTTPError → non-zero exit, so urllib never re-issues the POST (with the
     Authorization header) to the redirect target."""
-    server = HTTPServer(("127.0.0.1", 0), _RedirectHandler)
-    threading.Thread(target=server.serve_forever, daemon=True).start()
-    base = f"http://127.0.0.1:{server.server_address[1]}"
+    server, base = _start_server(_RedirectHandler)
     try:
         with tempfile.TemporaryDirectory() as d:
             use_file_secrets(Path(d), endpoint=f"{base}/api/message")

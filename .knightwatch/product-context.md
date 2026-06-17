@@ -3,14 +3,8 @@
 This is the **shared contract layer** for the life-dashboard `ld-*` producers —
 a small product library, NOT a SEED. It is pulled into both
 `seed-life-dashboard-agent` (Plow) and `seed-life-dashboard-hermes-agent`
-(Hermes) as `ld-shared` at install time. A fix here reaches both platforms.
-
-Operating point (org default):
-
-- **Stage:** pre-PMF, early. Iteration speed > hardening for scale.
-- **Userbase:** fewer than 10 households, often a single operator. Abstractions,
-  flags, and defensive edge-case handling sized for thousands of users are
-  over-engineering here, not robustness.
+(Hermes) as `ld-shared` at install time, so a fix here reaches both platforms.
+(Operating point + review emphasis: see `review-priority.md`.)
 
 **What this repo owns:**
 
@@ -18,13 +12,7 @@ Operating point (org default):
   calls, serving both platforms (file-or-env secrets, stdin-or-MESSAGE_FILE
   message). Its security posture is load-bearing: no-redirect opener (no bearer
   forwarding on a 30x), body redaction on `--dry-run`, fixed non-argv secret
-  sources, fail-loud on any missing input. Review changes here for that posture.
+  sources, fail-loud on any missing input.
 - `scripts/test_post_to_kiosk.py` — behavior tests for both transports.
 - `references/kiosk-protocol.md` — the producer↔viewer wire/tile contract.
 - `references/config.example.json`, `references/connectors.md` — shared templates.
-
-**Review emphasis:** because this is consumed by two seeds, a change here that
-breaks one platform's transport is the highest-severity bug class. The helper
-must keep serving BOTH (Plow: file secrets + stdin; Hermes: env secrets +
-MESSAGE_FILE). Prefer subtractive remedies; don't add per-platform branches the
-file-first/env-fallback and stdin/MESSAGE_FILE seams already subsume.
