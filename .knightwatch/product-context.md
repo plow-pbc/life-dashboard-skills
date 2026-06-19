@@ -14,5 +14,8 @@ a small product library, NOT a SEED. It is pulled into both
   forwarding on a 30x), body redaction on `--dry-run`, fixed non-argv secret
   sources, fail-loud on any missing input.
 - `scripts/test_post_to_kiosk.py` — behavior tests for both transports.
+- `scripts/ld_config_gate.py` — the ONE structural gate defining a valid
+  ld-config; both seeds gate install + verify on it (the Pi needs no jq).
+- `scripts/test_ld_config_gate.py` — its jq-equivalence tests.
 - `references/kiosk-protocol.md` — the producer↔viewer wire/tile contract.
 - `references/config.example.json`, `references/connectors.md` — shared templates.

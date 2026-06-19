@@ -21,6 +21,8 @@ with the kiosk viewer — lives here, so a fix lands once:
 |---|---|---|
 | `scripts/post_to_kiosk.py` | The POST helper every producer wrapper calls | One no-redirect, redacting, fail-loud POST core; serves both transports (file-or-env secrets, stdin-or-MESSAGE_FILE message) |
 | `scripts/test_post_to_kiosk.py` | Its tests (both transports) | The helper's owner tests it |
+| `scripts/ld_config_gate.py` | The structural gate defining a valid ld-config (fail-closed "is it installed") | One definition of a valid ld-config; both seeds gate install + verify on it (and the Pi needs no jq) |
+| `scripts/test_ld_config_gate.py` | Its tests (jq-equivalence matrix) | Pins the Python port to the original jq filter's behavior |
 | `references/kiosk-protocol.md` | The kiosk wire body, card map, char budget, and the self-contained weather/sports tile HTML | The producer↔viewer contract — the most drift-dangerous artifact |
 | `references/config.example.json` | The canonical ld-config template | One config shape across producers + platforms |
 | `references/connectors.md` | The plow-connectors data door (connector-based platforms) | One door doc |
@@ -35,4 +37,4 @@ resolves unchanged. A fix here reaches both seeds on their next install.
 
 ## Test
 
-    just test    # runs scripts/test_post_to_kiosk.py (both transports)
+    just test    # test_post_to_kiosk.py (both transports) + test_ld_config_gate.py (jq-equivalence)

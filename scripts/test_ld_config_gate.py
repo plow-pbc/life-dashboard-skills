@@ -40,7 +40,7 @@ JQ_FILTER = r"""
 
 VALID = {
     "family": {"owner": {"name": "Sam"}, "timezone": "America/Los_Angeles"},
-    "calendar": {"sources": [{"account": "sam@odio.com", "calendar_id": "primary", "name": "Personal"}]},
+    "calendar": {"sources": [{"account": "owner@example.test", "calendar_id": "primary", "name": "Personal"}]},
     "weather": {"location": "Mountain View", "lat": 37.386, "lon": -122.083},
 }
 
@@ -114,36 +114,35 @@ CASES = [
 ]
 
 
-def run_gate(runner, raw):
-    """Run a gate command (list prefix) on raw bytes; return its stdout, stripped of one trailing newline."""
+def _run_on_tempfile(runner, raw):
+    """Write raw to a temp .json, run `runner + [path]`, return (returncode, stdout).
+
+    stdout is stripped of one trailing newline — both gates print exactly one,
+    so this normalizes them for comparison.
+    """
     with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False, encoding="utf-8") as f:
         f.write(raw)
         path = f.name
     try:
         proc = subprocess.run(runner + [path], capture_output=True, text=True)
-        # The python gate returns 0 for every config verdict (valid / failures /
-        # "not valid JSON"); a non-zero exit is a crash or usage bug, never a
-        # verdict. Surface it so it can't masquerade as an empty-stdout PASS.
-        if proc.returncode != 0:
-            return f"<gate exited nonzero: {proc.returncode}>"
-        # both gates print exactly one trailing newline; normalize for compare.
-        return proc.stdout.rstrip("\n")
+        return proc.returncode, proc.stdout.rstrip("\n")
     finally:
         Path(path).unlink(missing_ok=True)
+
+
+def run_gate(runner, raw):
+    """Run a gate command (list prefix) on raw bytes; return its verdict line."""
+    rc, out = _run_on_tempfile(runner, raw)
+    # The python gate returns 0 for every config verdict (valid / failures /
+    # "not valid JSON"); a non-zero exit is a crash or usage bug, never a
+    # verdict. Surface it so it can't masquerade as an empty-stdout PASS.
+    return out if rc == 0 else f"<gate exited nonzero: {rc}>"
 
 
 def jq_gate(raw):
     """The original jq filter, wrapped exactly as the shell gate wrapped it."""
-    with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False, encoding="utf-8") as f:
-        f.write(raw)
-        path = f.name
-    try:
-        proc = subprocess.run(["jq", "-r", JQ_FILTER, path], capture_output=True, text=True)
-        if proc.returncode != 0:
-            return "not valid JSON"  # the `|| echo "not valid JSON"` arm
-        return proc.stdout.rstrip("\n")
-    finally:
-        Path(path).unlink(missing_ok=True)
+    rc, out = _run_on_tempfile(["jq", "-r", JQ_FILTER], raw)
+    return out if rc == 0 else "not valid JSON"  # the `|| echo "not valid JSON"` arm
 
 
 def main():
