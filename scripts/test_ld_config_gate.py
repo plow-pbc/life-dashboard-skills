@@ -103,6 +103,13 @@ CASES = [
     ("a source is non-object → not valid JSON",
      json.dumps({**VALID, "calendar": {"sources": ["x"]}}),
      "not valid JSON", True),
+    # A blank-account object FOLLOWED by a non-object element: jq's `?` suppresses
+    # only the `.[]` iteration error, so it still evaluates `"x".account` and the
+    # whole filter collapses to "not valid JSON" — it does NOT short-circuit on the
+    # earlier blank account. Pins the gate to sweep ALL elements (no early break).
+    ("blank account then non-object source → not valid JSON",
+     json.dumps({**VALID, "calendar": {"sources": [{"account": "  "}, "x"]}}),
+     "not valid JSON", True),
     ("top-level array → not valid JSON", json.dumps([1, 2, 3]), "not valid JSON", True),
 ]
 

@@ -109,12 +109,19 @@ def gate(config):
 
     # 3. no calendar.sources[].account is blank. jq's `.calendar.sources[]?`
     #    iterates only when sources is an array; each element's `.account` errors
-    #    if the element is not an object (caught as 'not valid JSON').
+    #    if the element is not an object (caught as 'not valid JSON'). jq's `?`
+    #    suppresses only the `.[]` iteration error, NOT the downstream `.account`
+    #    index — so we must visit EVERY element (no early break): a later
+    #    non-object element still raises GateError and collapses to "not valid
+    #    JSON", exactly as jq does. We record the blank-account failure at most
+    #    once, after the full sweep.
     if isinstance(sources, list):
+        blank_account = False
         for src in sources:
             if not _test_nonblank(_index(src, "account")):
-                failures.append("a calendar.sources[].account is blank")
-                break
+                blank_account = True
+        if blank_account:
+            failures.append("a calendar.sources[].account is blank")
 
     # 4. no leftover [UPPER_SNAKE] placeholder anywhere
     if any(_PLACEHOLDER_RE.match(s) for s in _all_strings(config)):
