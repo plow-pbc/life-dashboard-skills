@@ -21,6 +21,8 @@ with the kiosk viewer — lives here, so a fix lands once:
 |---|---|---|
 | `scripts/post_to_kiosk.py` | The POST helper every producer wrapper calls | One no-redirect, redacting, fail-loud POST core; serves both transports (file-or-env secrets, stdin-or-MESSAGE_FILE message) |
 | `scripts/test_post_to_kiosk.py` | Its tests (both transports) | The helper's owner tests it |
+| `scripts/ld_config_gate.py` | The structural gate defining a valid ld-config (fail-closed "is it installed") | One definition of a valid ld-config; both seeds gate install + verify on it (and the Pi needs no jq) |
+| `scripts/test_ld_config_gate.py` | Its tests (jq-equivalence matrix) | Pins the Python port to the original jq filter's behavior |
 | `scripts/ld-runtime.js` | Shared JS runtime helpers (`minuteInTz`, `readTrimmed`, `postKiosk`) for the Plow seed's deterministic scheduled runners | The byte-identical self-gate / trimmed-read / kiosk-POST blocks every JS producer had — one fail-loud, no-redirect POST core, `postKiosk` parameterized by per-producer card fields |
 | `scripts/test_ld-runtime.js` | Its tests (Node) | The helper's owner tests it |
 | `references/kiosk-protocol.md` | The kiosk wire body, card map, char budget, and the self-contained weather/sports tile HTML | The producer↔viewer contract — the most drift-dangerous artifact |
@@ -39,4 +41,4 @@ skill dir). A fix here reaches both seeds on their next install.
 
 ## Test
 
-    just test    # scripts/test_post_to_kiosk.py (both transports) + node --test scripts/test_ld-runtime.js
+    just test    # test_post_to_kiosk.py (both transports) + test_ld_config_gate.py (jq-equivalence) + test_ld-runtime.js (node --test)

@@ -4,9 +4,10 @@
 both life-dashboard seeds). Pre-PMF, one operator per household, not at scale.
 
 **Cultural emphasis:** SIMPLIFY at all costs — subtractive remedies (delete,
-collapse, inline) outrank additive ones at every severity. The one piece of
-executable code (`scripts/post_to_kiosk.py`) has a load-bearing security posture
-(no-redirect, redaction, fixed non-argv secret sources, fail-loud); the
+collapse, inline) outrank additive ones at every severity. The executable code
+(`scripts/post_to_kiosk.py`, with a load-bearing security posture — no-redirect,
+redaction, fixed non-argv secret sources, fail-loud — and `scripts/ld_config_gate.py`,
+the fail-closed ld-config structural gate) is small and reference-grade; the
 reference docs are contracts the two seeds and the viewer must agree on.
 
 **Repo-specific contrast pairs (beyond the universal set in `standards.md`):**
