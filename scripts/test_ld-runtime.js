@@ -33,13 +33,13 @@ test("minuteInTz returns the wall-clock minute in the given timezone", () => {
   assert.equal(minuteInTz(now, "UTC"), 34);
 });
 
-test("postKiosk merges cardFields + text and sends the bearer", async () => {
+test("postKiosk merges cardFields (incl. extras like title) + text and sends the bearer", async () => {
   const calls = [];
   const fetchImpl = async (url, init) => {
     calls.push({ url, init });
     return { ok: true, status: 200 };
   };
-  await postKiosk(fetchImpl, "http://kiosk.lan", "tok", "hi there", { card: "5", type: "sports" });
+  await postKiosk(fetchImpl, "http://kiosk.lan", "tok", "hi there", { card: "5", type: "sports", title: "" });
 
   assert.equal(calls.length, 1);
   const { url, init } = calls[0];
@@ -48,17 +48,8 @@ test("postKiosk merges cardFields + text and sends the bearer", async () => {
   assert.equal(init.headers.Authorization, "Bearer tok");
   assert.equal(init.redirect, "error"); // never forward the bearer to a 3xx
   const body = JSON.parse(init.body);
-  assert.deepEqual(body, { card: "5", type: "sports", text: "hi there" });
-});
-
-test("postKiosk passes through extra card fields (e.g. title)", async () => {
-  let sent;
-  const fetchImpl = async (_url, init) => {
-    sent = JSON.parse(init.body);
-    return { ok: true };
-  };
-  await postKiosk(fetchImpl, "https://k", "t", "x", { card: "1", type: "alert", title: "" });
-  assert.deepEqual(sent, { card: "1", type: "alert", title: "", text: "x" });
+  // Every cardField (card/type and any extra like title) is merged with text.
+  assert.deepEqual(body, { card: "5", type: "sports", title: "", text: "hi there" });
 });
 
 test("postKiosk rejects a non-http(s) dashboard URL", async () => {

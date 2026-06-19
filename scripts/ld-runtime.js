@@ -17,15 +17,17 @@ async function readTrimmed(readFile, path) {
 }
 
 // Wall-clock minute (0-59) in `tz`. Used by the self-gates; computed in the
-// family timezone so a producer's cadence is correct even on a UTC gateway.
+// family timezone so a producer's cadence is correct even on a UTC gateway. A
+// valid tz always yields a `minute` part (an invalid tz throws at construction),
+// so we read it directly — no gateway-local fallback that would silently move
+// the gate off the family timezone.
 function minuteInTz(now, tz) {
   const parts = new Intl.DateTimeFormat("en-US", {
     timeZone: tz,
     hour12: false,
     minute: "2-digit",
   }).formatToParts(now);
-  const m = parts.find((p) => p.type === "minute");
-  return m ? parseInt(m.value, 10) : now.getMinutes();
+  return parseInt(parts.find((p) => p.type === "minute").value, 10);
 }
 
 // POST a rendered tile to the kiosk. `cardFields` carries the per-producer
