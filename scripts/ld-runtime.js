@@ -83,12 +83,15 @@ async function loadLdConfig(readFile, opts = {}) {
 }
 
 // Post a card to the kiosk BEST-EFFORT: read the dashboard secrets (from `opts`
-// in tests, else the /config mount), POST via postKiosk, and on ANY failure
-// (offline Pi, non-200, misconfigured URL) log `kiosk_post_failed` and return
-// false instead of throwing. The household screen is a Pi that is often offline
-// (unplugged / off-network while traveling) and must never crash a scheduled
-// producer; a producer with a second surface (calendar-nudge → iMessage) also
-// relies on this not aborting the run. Returns true on a successful post.
+// in tests, else the /config mount), POST via postKiosk, and on any *kiosk POST*
+// failure (offline Pi, non-200, misconfigured URL) log `kiosk_post_failed` and
+// return false instead of throwing. The household screen is a Pi that is often
+// offline (unplugged / off-network while traveling) and must never crash a
+// scheduled producer; a producer with a second surface (calendar-nudge →
+// iMessage) also relies on this not aborting the run. Returns true on a
+// successful post. The secret reads are deliberately OUTSIDE the guard: a
+// missing/unreadable local /config secret is a genuine install error and fails
+// loud (fail-fast), unlike a transient offline Pi.
 async function postKioskCard(fetchImpl, readFile, text, cardFields, log, opts = {}) {
   const dashUrl = opts.dashUrl ?? (await readTrimmed(readFile, DASH_URL_PATH));
   const dashToken = opts.dashToken ?? (await readTrimmed(readFile, DASH_TOKEN_PATH));
