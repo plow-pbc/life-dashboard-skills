@@ -55,10 +55,59 @@ const LD_CONFIG_PATH = "/config/runtime/ld/config.json";
 const DASH_URL_PATH = "/config/secrets/dashboard-endpoint-url";
 const DASH_TOKEN_PATH = "/config/secrets/dashboard-token";
 
+// Build a producer's stderr logger. Every scheduled producer logged with the
+// identical `[<slug>] message {json}` shape, differing only by the prefix — this
+// factory collapses those copies. The JSON.stringify is guarded so a
+// non-serializable `fields` still logs the message.
+function makeLog(slug) {
+  return (message, fields) => {
+    try {
+      console.error(`[${slug}] ${message}${fields ? " " + JSON.stringify(fields) : ""}`);
+    } catch {
+      console.error(`[${slug}] ${message}`);
+    }
+  };
+}
+
+// Read + validate the shared ld-config: the file (or `opts.config` for tests)
+// plus the required `family.timezone` every producer self-gates on. Producers
+// read their own sections (weather.*, sports.*, calendar.*) off the returned
+// config; only the load + the universal timezone check are shared here.
+async function loadLdConfig(readFile, opts = {}) {
+  const config = opts.config ?? JSON.parse(await readFile(LD_CONFIG_PATH, "utf8"));
+  const timezone = config?.family?.timezone;
+  if (typeof timezone !== "string" || timezone.length === 0) {
+    throw new Error("family.timezone missing in /config/runtime/ld/config.json");
+  }
+  return { config, timezone };
+}
+
+// Post a card to the kiosk BEST-EFFORT: read the dashboard secrets (from `opts`
+// in tests, else the /config mount), POST via postKiosk, and on ANY failure
+// (offline Pi, non-200, misconfigured URL) log `kiosk_post_failed` and return
+// false instead of throwing. The household screen is a Pi that is often offline
+// (unplugged / off-network while traveling) and must never crash a scheduled
+// producer; a producer with a second surface (calendar-nudge → iMessage) also
+// relies on this not aborting the run. Returns true on a successful post.
+async function postKioskCard(fetchImpl, readFile, text, cardFields, log, opts = {}) {
+  const dashUrl = opts.dashUrl ?? (await readTrimmed(readFile, DASH_URL_PATH));
+  const dashToken = opts.dashToken ?? (await readTrimmed(readFile, DASH_TOKEN_PATH));
+  try {
+    await postKiosk(fetchImpl, dashUrl, dashToken, text, cardFields);
+    return true;
+  } catch (err) {
+    log("kiosk_post_failed", { error: String((err && err.message) || err) });
+    return false;
+  }
+}
+
 module.exports = {
   readTrimmed,
   minuteInTz,
   postKiosk,
+  makeLog,
+  loadLdConfig,
+  postKioskCard,
   LD_CONFIG_PATH,
   DASH_URL_PATH,
   DASH_TOKEN_PATH,
