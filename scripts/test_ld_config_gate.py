@@ -5,9 +5,9 @@ The gate runs ON THE PI, where jq is not provisioned; it replaces the jq filter
 that each seed's install + verify steps used to carry verbatim. This test pins
 the gate's output to the EXACT contract of that old jq filter:
 
-  - the six documented outcomes (issue #9): valid → pass; blank owner name;
-    sources not a non-empty array; blank source account; leftover placeholder;
-    invalid JSON.
+  - the documented outcomes (issue #9): valid → pass; blank owner name; blank/
+    missing family.timezone; sources not a non-empty array; blank source account;
+    leftover placeholder; invalid JSON.
   - whenever jq IS available on the test machine (it is on the dev box; it is
     NOT on the Pi), every fixture below is ALSO run through the original jq
     filter and asserted byte-identical — proving the port is faithful, not just
@@ -90,7 +90,7 @@ CASES = [
     # latent bug — verify.sh's own `jq -e .` pre-check already rejected it). The
     # python gate fail-CLOSES it as "not valid JSON" (empty is not valid JSON),
     # which is strictly safer; we skip the jq cross-check for this one case only.
-    ("(f') empty file → fail-closed (diverges from jq's fail-open)",
+    ("(g') empty file → fail-closed (diverges from jq's fail-open)",
      "", "not valid JSON", False),
     # multiple simultaneous failures join with "; " in filter order.
     ("multi: blank name + missing tz + empty sources",
