@@ -71,10 +71,16 @@ function makeLog(slug) {
 async function loadLdConfig(readFile, opts = {}) {
   const config = opts.config ?? JSON.parse(await readFile(LD_CONFIG_PATH, "utf8"));
   const timezone = config?.family?.timezone;
-  // .trim() so a whitespace-only tz is rejected too — it matches the install
-  // gate's non-blank check AND would otherwise crash minuteInTz's Intl call.
-  if (typeof timezone !== "string" || timezone.trim().length === 0) {
-    throw new Error("family.timezone missing/blank in /config/runtime/ld/config.json");
+  // Validate by constructing Intl.DateTimeFormat — the authoritative check. It
+  // rejects missing/blank AND any non-IANA value (a typo'd tz), so minuteInTz
+  // (every producer's self-gate) can never crash on it downstream. A non-string
+  // is caught explicitly first, because Intl treats an undefined timeZone as the
+  // system default (it would NOT throw).
+  try {
+    if (typeof timezone !== "string") throw new Error("not a string");
+    new Intl.DateTimeFormat("en-US", { timeZone: timezone });
+  } catch {
+    throw new Error("family.timezone missing or not a valid IANA timezone in /config/runtime/ld/config.json");
   }
   return { config, timezone };
 }
