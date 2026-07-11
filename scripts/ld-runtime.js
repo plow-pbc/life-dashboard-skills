@@ -57,16 +57,11 @@ const DASH_TOKEN_PATH = "/config/secrets/dashboard-token";
 
 // Build a producer's stderr logger. Every scheduled producer logged with the
 // identical `[<slug>] message {json}` shape, differing only by the prefix — this
-// factory collapses those copies. The JSON.stringify is guarded so a
-// non-serializable `fields` still logs the message.
+// factory collapses those copies. `fields` is always a small plain object, so
+// JSON.stringify is not guarded (fail-fast on a non-serializable payload).
 function makeLog(slug) {
-  return (message, fields) => {
-    try {
-      console.error(`[${slug}] ${message}${fields ? " " + JSON.stringify(fields) : ""}`);
-    } catch {
-      console.error(`[${slug}] ${message}`);
-    }
-  };
+  return (message, fields) =>
+    console.error(`[${slug}] ${message}${fields ? " " + JSON.stringify(fields) : ""}`);
 }
 
 // Read + validate the shared ld-config: the file (or `opts.config` for tests)
@@ -76,8 +71,10 @@ function makeLog(slug) {
 async function loadLdConfig(readFile, opts = {}) {
   const config = opts.config ?? JSON.parse(await readFile(LD_CONFIG_PATH, "utf8"));
   const timezone = config?.family?.timezone;
-  if (typeof timezone !== "string" || timezone.length === 0) {
-    throw new Error("family.timezone missing in /config/runtime/ld/config.json");
+  // .trim() so a whitespace-only tz is rejected too — it matches the install
+  // gate's non-blank check AND would otherwise crash minuteInTz's Intl call.
+  if (typeof timezone !== "string" || timezone.trim().length === 0) {
+    throw new Error("family.timezone missing/blank in /config/runtime/ld/config.json");
   }
   return { config, timezone };
 }

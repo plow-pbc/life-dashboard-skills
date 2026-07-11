@@ -111,8 +111,10 @@ test("loadLdConfig reads + parses the mounted config file when opts.config is ab
 });
 
 test("loadLdConfig throws when family.timezone is missing/blank", async () => {
-  for (const bad of [{}, { family: {} }, { family: { timezone: "" } }]) {
-    await assert.rejects(() => loadLdConfig(async () => "", { config: bad }), /family\.timezone missing/);
+  // Whitespace-only is rejected too — matches the install gate and avoids a
+  // downstream minuteInTz Intl crash.
+  for (const bad of [{}, { family: {} }, { family: { timezone: "" } }, { family: { timezone: "   " } }]) {
+    await assert.rejects(() => loadLdConfig(async () => "", { config: bad }), /family\.timezone missing\/blank/);
   }
 });
 
