@@ -16,8 +16,10 @@ can never drift from each other or from install↔verify. It runs ON THE PI, whe
 jq is deliberately not provisioned but python3 is guaranteed present on Debian —
 this replaces the jq filter the seeds used to carry verbatim.
 
-Contract (byte-identical to the jq gate it replaces — see test_ld_config_gate.py
-for the equivalence proof against jq):
+Contract (the original jq gate PLUS the family.timezone invariant, added to align
+the "installed" verdict with the shared runtime precondition loadLdConfig — the
+jq reference in test_ld_config_gate.py is updated in lockstep so the equivalence
+proof still holds):
   - Prints the failing invariant name(s) to stdout, joined by "; ".
   - Empty stdout == PASS. Never prints PII (the owner name / calendar account).
   - Prints exactly "not valid JSON" (and nothing else) when the file does not
@@ -25,11 +27,12 @@ for the equivalence proof against jq):
     (indexing a non-object, or testing a non-string field) — jq's gate ran with
     `2>/dev/null || echo "not valid JSON"`, collapsing both into that one line.
 
-The four checks, matching the original jq filter exactly:
+The five checks, matching the (updated) jq filter exactly:
   1. family.owner.name must contain a non-whitespace char  (jq: (.family.owner.name // "") | test("\\S"))
-  2. calendar.sources must be a non-empty array            (jq: (type) == "array" and length >= 1)
-  3. no calendar.sources[].account may be blank            (jq: select(((.account // "") | test("\\S")) | not))
-  4. no string value anywhere may be a leftover placeholder (jq: .. | strings | test("^\\[[A-Z][A-Z0-9_]*\\]$"))
+  2. family.timezone must contain a non-whitespace char    (jq: (.family.timezone // "") | test("\\S"))
+  3. calendar.sources must be a non-empty array            (jq: (type) == "array" and length >= 1)
+  4. no calendar.sources[].account may be blank            (jq: select(((.account // "") | test("\\S")) | not))
+  5. no string value anywhere may be a leftover placeholder (jq: .. | strings | test("^\\[[A-Z][A-Z0-9_]*\\]$"))
 """
 import json
 import re
@@ -102,12 +105,20 @@ def gate(config):
     if not _test_nonblank(name):
         failures.append("family.owner.name is blank")
 
-    # 2. calendar.sources is a non-empty array
+    # 2. family.timezone non-blank — the shared runtime precondition. ld-runtime.js
+    #    loadLdConfig() requires it, and a blank/whitespace tz also crashes
+    #    minuteInTz (Intl rejects it), so the install gate must reject configs the
+    #    runtime cannot execute.
+    tz = _index(_index(config, "family"), "timezone")
+    if not _test_nonblank(tz):
+        failures.append("family.timezone is blank")
+
+    # 3. calendar.sources is a non-empty array
     sources = _index(_index(config, "calendar"), "sources")
     if not (isinstance(sources, list) and len(sources) >= 1):
         failures.append("calendar.sources is not a non-empty array")
 
-    # 3. no calendar.sources[].account is blank. jq's `.calendar.sources[]?`
+    # 4. no calendar.sources[].account is blank. jq's `.calendar.sources[]?`
     #    iterates only when sources is an array; each element's `.account` errors
     #    if the element is not an object (caught as 'not valid JSON'). jq's `?`
     #    suppresses only the `.[]` iteration error, NOT the downstream `.account`
@@ -123,7 +134,7 @@ def gate(config):
         if blank_account:
             failures.append("a calendar.sources[].account is blank")
 
-    # 4. no leftover [UPPER_SNAKE] placeholder anywhere
+    # 5. no leftover [UPPER_SNAKE] placeholder anywhere
     if any(_PLACEHOLDER_RE.match(s) for s in _all_strings(config)):
         failures.append("an unfilled [UPPER_SNAKE] placeholder remains")
 

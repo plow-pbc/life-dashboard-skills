@@ -5,9 +5,9 @@ The gate runs ON THE PI, where jq is not provisioned; it replaces the jq filter
 that each seed's install + verify steps used to carry verbatim. This test pins
 the gate's output to the EXACT contract of that old jq filter:
 
-  - the six documented outcomes (issue #9): valid → pass; blank owner name;
-    sources not a non-empty array; blank source account; leftover placeholder;
-    invalid JSON.
+  - the documented outcomes (issue #9): valid → pass; blank owner name; blank/
+    missing family.timezone; sources not a non-empty array; blank source account;
+    leftover placeholder; invalid JSON.
   - whenever jq IS available on the test machine (it is on the dev box; it is
     NOT on the Pi), every fixture below is ALSO run through the original jq
     filter and asserted byte-identical — proving the port is faithful, not just
@@ -29,6 +29,7 @@ GATE = Path(__file__).resolve().parent / "ld_config_gate.py"
 # and verify-time v-ld-config — the byte-for-byte spec the python gate must match.
 JQ_FILTER = r"""
     [ if ((.family.owner.name     // "") | test("\\S")) then empty else "family.owner.name is blank" end,
+      if ((.family.timezone       // "") | test("\\S")) then empty else "family.timezone is blank" end,
       if ((.calendar.sources | type) == "array" and (.calendar.sources | length) >= 1)
         then empty else "calendar.sources is not a non-empty array" end,
       if ([.calendar.sources[]? | select(((.account // "") | test("\\S")) | not)] | length) == 0
@@ -77,18 +78,24 @@ CASES = [
     ("(e') leftover placeholder (nested)",
      json.dumps({**VALID, "weather": {"location": "[CITY_NAME]"}}),
      "an unfilled [UPPER_SNAKE] placeholder remains", True),
-    ("(f) invalid JSON", "{ not json", "not valid JSON", True),
+    ("(f) blank timezone",
+     json.dumps({**VALID, "family": {**VALID["family"], "timezone": "   "}}),
+     "family.timezone is blank", True),
+    ("(f') missing timezone",
+     json.dumps({**VALID, "family": {"owner": {"name": "Sam"}}}),
+     "family.timezone is blank", True),
+    ("(g) invalid JSON", "{ not json", "not valid JSON", True),
     # An empty file is the lone DELIBERATE divergence: jq with no input emits
     # nothing and exits 0, so the old gate fail-OPEN-passed an empty config (a
     # latent bug — verify.sh's own `jq -e .` pre-check already rejected it). The
     # python gate fail-CLOSES it as "not valid JSON" (empty is not valid JSON),
     # which is strictly safer; we skip the jq cross-check for this one case only.
-    ("(f') empty file → fail-closed (diverges from jq's fail-open)",
+    ("(g') empty file → fail-closed (diverges from jq's fail-open)",
      "", "not valid JSON", False),
     # multiple simultaneous failures join with "; " in filter order.
-    ("multi: blank name + empty sources",
+    ("multi: blank name + missing tz + empty sources",
      json.dumps({"family": {"owner": {"name": ""}}, "calendar": {"sources": []}}),
-     "family.owner.name is blank; calendar.sources is not a non-empty array", True),
+     "family.owner.name is blank; family.timezone is blank; calendar.sources is not a non-empty array", True),
     # jq // "" semantics: a false value coalesces to "" (blank), not an error.
     ("name false → blank",
      json.dumps({**VALID, "family": {**VALID["family"], "owner": {"name": False}}}),
